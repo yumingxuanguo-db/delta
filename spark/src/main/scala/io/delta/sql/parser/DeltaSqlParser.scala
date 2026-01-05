@@ -58,7 +58,8 @@ import org.apache.spark.sql.{AnalysisException, SparkSession}
 import org.apache.spark.sql.catalyst.expressions.{Expression, Literal}
 import org.apache.spark.sql.catalyst.{FunctionIdentifier, TableIdentifier}
 import org.apache.spark.sql.catalyst.analysis._
-import org.apache.spark.sql.catalyst.parser.{DeltaParseException, ParseErrorListener, ParseException, ParseExceptionShims, ParserInterface}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedTableImplicits._
+import org.apache.spark.sql.catalyst.parser.{ParseErrorListener, ParseException, ParserInterface}
 import org.apache.spark.sql.catalyst.parser.ParserUtils.{checkDuplicateClauses, string, withOrigin}
 import org.apache.spark.sql.catalyst.plans.logical.{AlterColumnSyncIdentity, AlterTableAddConstraint, AlterTableDropConstraint, AlterTableDropFeature, CloneTableStatement, LogicalPlan, RestoreTableStatement}
 import org.apache.spark.sql.catalyst.trees.Origin
@@ -72,7 +73,8 @@ import org.apache.spark.sql.types._
  * forward the call to `delegate`.
  */
 class DeltaSqlParser(val delegate: ParserInterface)
-    extends ParserInterface {
+    extends ParserInterface
+    with DeltaSqlParserShims {
   private val builder = new DeltaSqlAstBuilder
   private val substitution = new VariableSubstitution
 
@@ -132,7 +134,7 @@ class DeltaSqlParser(val delegate: ParserInterface)
         throw e.withCommand(command)
       case e: AnalysisException =>
         val position = Origin(e.line, e.startPosition)
-        throw ParseExceptionShims.createParseException(
+        throw new ParseException(
           command = Option(command),
           start = position,
           stop = position,
@@ -155,8 +157,6 @@ class DeltaSqlParser(val delegate: ParserInterface)
   override def parseTableSchema(sqlText: String): StructType = delegate.parseTableSchema(sqlText)
 
   override def parseDataType(sqlText: String): DataType = delegate.parseDataType(sqlText)
-
-  override def parseRoutineParam(sqlText: String): StructType = delegate.parseRoutineParam(sqlText)
 }
 
 /**

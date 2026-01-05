@@ -19,10 +19,10 @@ package org.apache.spark.sql.delta.util
 import org.apache.spark.sql.delta.logging.DeltaLogKeys
 
 import org.apache.spark.SparkContext
-import org.apache.spark.internal.{Logging, MDC}
+import org.apache.spark.internal.{LoggingShims, MDC}
 import org.apache.spark.sql.SparkSession
 
-trait DeltaProgressReporter extends Logging {
+trait DeltaProgressReporter extends LoggingShims {
   /**
    * Report a log to indicate some command is running.
    */

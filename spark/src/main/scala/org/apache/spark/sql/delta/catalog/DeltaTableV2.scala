@@ -38,6 +38,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{DataFrame, Dataset, SaveMode, SparkSession}
 import org.apache.spark.sql.catalyst.TableIdentifier
 import org.apache.spark.sql.catalyst.analysis.{ResolvedTable, UnresolvedTable}
+import org.apache.spark.sql.catalyst.analysis.UnresolvedTableImplicits._
 import org.apache.spark.sql.catalyst.catalog.{CatalogTable, CatalogTableType, CatalogUtils}
 import org.apache.spark.sql.catalyst.plans.logical.{AnalysisHelper, LogicalPlan, SubqueryAlias}
 import org.apache.spark.sql.catalyst.types.DataTypeUtils.toAttributes
@@ -48,7 +49,7 @@ import org.apache.spark.sql.connector.catalog.V1Table
 import org.apache.spark.sql.connector.expressions._
 import org.apache.spark.sql.connector.write.{LogicalWriteInfo, SupportsDynamicOverwrite, SupportsOverwrite, SupportsTruncate, V1Write, WriteBuilder}
 import org.apache.spark.sql.errors.QueryCompilationErrors
-import org.apache.spark.sql.execution.datasources.LogicalRelation
+import org.apache.spark.sql.execution.datasources.{LogicalRelation, LogicalRelationShims}
 import org.apache.spark.sql.sources.{BaseRelation, Filter, InsertableRelation}
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
@@ -327,12 +328,8 @@ class DeltaTableV2 private(
   /** Creates a [[LogicalRelation]] that represents this table */
   lazy val toLogicalRelation: LogicalRelation = {
     val relation = this.toBaseRelation
-    LogicalRelation(
-      relation,
-      toAttributes(relation.schema),
-      ttSafeCatalogTable,
-      isStreaming = false,
-      stream = None)
+    LogicalRelationShims.newInstance(
+      relation, toAttributes(relation.schema), ttSafeCatalogTable, isStreaming = false)
   }
 
   /** Creates a [[DataFrame]] that uses the requested spark session to read from this table */
@@ -354,15 +351,10 @@ class DeltaTableV2 private(
     val ttSpec = DeltaDataSource.getTimeTravelVersion(newOptions)
 
     // Spark 4.0 and 3.5 handle time travel options differently.
-    // Validate that only one time travel spec is being used
-    (timeTravelOpt, ttSpec) match {
-      case (Some(currSpec), Some(newSpec))
-        if currSpec.version != newSpec.version  ||
-          currSpec.getTimestampOpt(spark.sessionState.conf).map(_.getTime) !=
-            newSpec.getTimestampOpt(spark.sessionState.conf).map(_.getTime) =>
-          throw DeltaErrors.multipleTimeTravelSyntaxUsed
-      case _ =>
-    }
+    DeltaTimeTravelSpecShims.validateTimeTravelSpec(
+      spark,
+      currSpecOpt = timeTravelOpt,
+      newSpecOpt = ttSpec)
 
     val caseInsensitiveNewOptions = new CaseInsensitiveStringMap(newOptions.asJava)
 

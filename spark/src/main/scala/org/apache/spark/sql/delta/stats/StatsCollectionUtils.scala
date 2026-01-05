@@ -39,7 +39,7 @@ import org.apache.parquet.io.api.Binary
 import org.apache.parquet.schema.LogicalTypeAnnotation._
 import org.apache.parquet.schema.PrimitiveType
 
-import org.apache.spark.internal.{Logging, MDC}
+import org.apache.spark.internal.{LoggingShims, MDC}
 import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.catalyst.util.DateTimeUtils
 import org.apache.spark.sql.execution.datasources.DataSourceUtils
@@ -49,7 +49,7 @@ import org.apache.spark.util.SerializableConfiguration
 
 
 object StatsCollectionUtils
-  extends Logging
+  extends LoggingShims
 {
 
   /**
@@ -88,7 +88,7 @@ object StatsCollectionUtils
     }
 
     val parquetRebaseMode =
-      spark.sessionState.conf.getConf(SQLConf.PARQUET_REBASE_MODE_IN_READ).toString
+      spark.sessionState.conf.getConf(SQLConf.PARQUET_REBASE_MODE_IN_READ)
 
     val stringTruncateLength =
       spark.sessionState.conf.getConf(DeltaSQLConf.DATA_SKIPPING_STRING_PREFIX_LENGTH)

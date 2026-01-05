@@ -16,6 +16,7 @@
 
 package org.apache.spark.sql.delta.test
 
+import org.apache.spark.sql.delta.DeltaExcludedBySparkVersionTestMixinShims
 import org.apache.spark.sql.delta.DeltaLog
 import org.apache.spark.sql.delta.test.DeltaSQLTestUtils
 import org.apache.spark.sql.delta.test.DeltaTestImplicits._
@@ -27,7 +28,7 @@ import org.apache.spark.sql.{Column, DataFrame}
 /**
  * Provides utilities for testing StatisticsCollection.
  */
-trait TestsStatistics  { self: DeltaSQLTestUtils =>
+trait TestsStatistics extends DeltaExcludedBySparkVersionTestMixinShims { self: DeltaSQLTestUtils =>
 
   /** A function to get the reconciled statistics DataFrame from the DeltaLog */
   protected var getStatsDf: (DeltaLog, Seq[Column]) => DataFrame = _
@@ -59,7 +60,7 @@ trait TestsStatistics  { self: DeltaSQLTestUtils =>
       testTags: org.scalatest.Tag*)(testFun: => Any): Unit = {
     import testImplicits._
 
-    test(testName, testTags: _*) {
+    testSparkMasterOnly(testName, testTags: _*) {
       getStatsDf = (deltaLog, columns) => {
         val snapshot = deltaLog.snapshot
         snapshot.allFiles

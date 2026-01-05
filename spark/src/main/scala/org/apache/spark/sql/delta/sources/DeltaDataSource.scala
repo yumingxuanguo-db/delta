@@ -45,7 +45,8 @@ import org.apache.spark.sql.connector.expressions.Transform
 import org.apache.spark.sql.execution.streaming.{Sink, Source}
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.streaming.OutputMode
-import org.apache.spark.sql.types.{DataType, StructType, VariantType}
+import org.apache.spark.sql.types.{DataType, VariantShims}
+import org.apache.spark.sql.types.StructType
 import org.apache.spark.sql.util.CaseInsensitiveStringMap
 
 
@@ -54,7 +55,7 @@ class DeltaDataSource
   extends RelationProvider
   with StreamSourceProvider
   with StreamSinkProvider
-  with CreatableRelationProvider
+  with CreatableRelationProviderShim
   with DataSourceRegister
   with TableProvider
   with DeltaLogging {
@@ -142,7 +143,10 @@ class DeltaDataSource
         .getOrElse(snapshot.schema)
     }
 
-    DeltaDataSource.verifyReadSchemaMatchesTheTableSchema(schema, readSchema)
+    if (schema.nonEmpty && schema.get.nonEmpty &&
+      !DataType.equalsIgnoreCompatibleNullability(readSchema, schema.get)) {
+      throw DeltaErrors.specifySchemaAtReadTimeException
+    }
 
     val schemaToUse = DeltaTableUtils.removeInternalDeltaMetadata(
       sqlContext.sparkSession,
@@ -165,6 +169,9 @@ class DeltaDataSource
       schema: Option[StructType],
       providerName: String,
       parameters: Map[String, String]): Source = {
+    if (schema.nonEmpty && schema.get.nonEmpty) {
+      throw DeltaErrors.specifySchemaAtReadTimeException
+    }
     val path = parameters.getOrElse("path", {
       throw DeltaErrors.pathNotSpecifiedException
     })
@@ -188,8 +195,6 @@ class DeltaDataSource
         log"${MDC(DeltaLogKeys.VERSION2, snapshot.version)}")
       snapshot.schema
     }
-
-    DeltaDataSource.verifyReadSchemaMatchesTheTableSchema(schema, readSchema)
 
     if (readSchema.isEmpty) {
       throw DeltaErrors.schemaNotSetException
@@ -303,9 +308,10 @@ class DeltaDataSource
 
   /**
    * Extend the default `supportsDataType` to allow VariantType.
+   * Implemented by `CreatableRelationProviderShim`.
    */
   override def supportsDataType(dt: DataType): Boolean = {
-    dt.isInstanceOf[VariantType] || super.supportsDataType(dt)
+    VariantShims.isVariantType(dt) || super.supportsDataType(dt)
   }
 
   override def shortName(): String = {
@@ -502,14 +508,5 @@ object DeltaDataSource extends DatabricksLogging {
           mergeConsecutiveSchemaChanges
         )
       }
-  }
-
-  private def verifyReadSchemaMatchesTheTableSchema(
-                                                     schema: Option[StructType],
-                                                     readSchema: StructType): Unit = {
-    if (schema.nonEmpty && schema.get.nonEmpty &&
-      !DataType.equalsIgnoreCompatibleNullability(readSchema, schema.get)) {
-      throw DeltaErrors.readSourceSchemaConflictException
-    }
   }
 }

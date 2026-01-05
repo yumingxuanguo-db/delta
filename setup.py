@@ -13,7 +13,19 @@ def get_version_from_sbt():
         version = fp.read().strip()
     return version.split('"')[1]
 
+
 VERSION = get_version_from_sbt()
+MAJOR_VERSION = int(VERSION.split(".")[0])
+
+if MAJOR_VERSION < 4:
+    packages_arg = ['delta']
+    install_requires_arg = ['pyspark>=3.5.2,<3.6.0', 'importlib_metadata>=1.0.0']
+    python_requires_arg = '>=3.6'
+else:  # MAJOR_VERSION >= 4
+    # Delta 4.0+ contains Delta Connect code and uses Spark 4.0+
+    packages_arg = ['delta', 'delta.connect', 'delta.connect.proto']
+    install_requires_arg = ['pyspark>=4.0.0', 'importlib_metadata>=1.0.0']
+    python_requires_arg = '>=3.9'
 
 class VerifyVersionCommand(install):
     """Custom command to verify that the git tag matches our version"""
@@ -31,9 +43,6 @@ class VerifyVersionCommand(install):
 
 with open("python/README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
-
-install_requires_arg = ['pyspark>=4.0.1', 'importlib_metadata>=1.0.0']
-python_requires_arg = '>=3.10'
 
 setup(
     name="delta-spark",
@@ -61,7 +70,7 @@ setup(
     ],
     keywords='delta.io',
     package_dir={'': 'python'},
-    packages=['delta', 'delta.connect', 'delta.connect.proto', 'delta.exceptions'],
+    packages=packages_arg,
     package_data={
         'delta': ['py.typed'],
     },

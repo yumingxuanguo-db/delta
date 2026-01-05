@@ -22,7 +22,7 @@ import java.util.regex.Pattern
 
 import scala.annotation.tailrec
 
-import org.apache.spark.sql.delta.{DeltaAnalysisException, DeltaLog, DeltaTestUtils, TypeWideningMode}
+import org.apache.spark.sql.delta.{DeltaAnalysisException, DeltaExcludedBySparkVersionTestMixinShims, DeltaLog, DeltaTestUtils, TypeWideningMode}
 import org.apache.spark.sql.delta.RowCommitVersion
 import org.apache.spark.sql.delta.RowId
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
@@ -49,7 +49,8 @@ class SchemaUtilsSuite extends QueryTest
   with SharedSparkSession
   with GivenWhenThen
   with DeltaSQLTestUtils
-  with DeltaSQLCommandTest {
+  with DeltaSQLCommandTest
+  with DeltaExcludedBySparkVersionTestMixinShims {
   import SchemaUtils._
   import TypeWideningMode._
   import testImplicits._
@@ -2600,9 +2601,7 @@ class SchemaUtilsSuite extends QueryTest
       allowAutomaticWidening = AllowAutomaticWideningMode.default),
     AllTypeWideningToCommonWiderType,
     TypeEvolutionToCommonWiderType(uniformIcebergCompatibleOnly = false),
-    TypeEvolutionToCommonWiderType(uniformIcebergCompatibleOnly = true),
-    AllTypeWideningWithDecimalCoercion,
-    TypeEvolutionWithDecimalCoercion
+    TypeEvolutionToCommonWiderType(uniformIcebergCompatibleOnly = true)
   )
 
   test("typeWideningMode - byte->short->int is always allowed") {
@@ -2639,7 +2638,7 @@ class SchemaUtilsSuite extends QueryTest
     MapType(IntegerType, IntegerType) -> MapType(LongType, LongType),
     ArrayType(IntegerType) -> ArrayType(LongType)
   ))
-  test(s"typeWideningMode ${fromType.sql} -> ${toType.sql}") {
+  testSparkMasterOnly(s"typeWideningMode ${fromType.sql} -> ${toType.sql}") {
     val narrow = new StructType().add("a", fromType)
     val wide = new StructType().add("a", toType)
 
@@ -2651,9 +2650,7 @@ class SchemaUtilsSuite extends QueryTest
           allowAutomaticWidening = AllowAutomaticWideningMode.default),
         TypeEvolution(
           uniformIcebergCompatibleOnly = true,
-          allowAutomaticWidening = AllowAutomaticWideningMode.default),
-        AllTypeWideningWithDecimalCoercion,
-        TypeEvolutionWithDecimalCoercion)) {
+          allowAutomaticWidening = AllowAutomaticWideningMode.default))) {
       // Narrowing is not allowed.
       expectAnalysisErrorClass("DELTA_MERGE_INCOMPATIBLE_DATATYPE",
         Map("currentDataType" -> "LongType", "updateDataType" -> "IntegerType")) {
@@ -2686,7 +2683,7 @@ class SchemaUtilsSuite extends QueryTest
     ShortType -> DoubleType,
     IntegerType -> DecimalType(10, 0)
   ))
-  test(
+  testSparkMasterOnly(
     s"typeWideningMode - blocked type evolution ${fromType.sql} -> ${toType.sql}") {
     val narrow = new StructType().add("a", fromType)
     val wide = new StructType().add("a", toType)
@@ -2699,8 +2696,7 @@ class SchemaUtilsSuite extends QueryTest
         TypeEvolution(
           uniformIcebergCompatibleOnly = true,
           allowAutomaticWidening = AllowAutomaticWideningMode.SAME_FAMILY_TYPE),
-        TypeEvolutionToCommonWiderType(uniformIcebergCompatibleOnly = true),
-        TypeEvolutionWithDecimalCoercion)) {
+        TypeEvolutionToCommonWiderType(uniformIcebergCompatibleOnly = true))) {
       expectAnalysisErrorClass(
         "DELTA_MERGE_INCOMPATIBLE_DATATYPE",
         Map("currentDataType" -> fromType.toString, "updateDataType" -> toType.toString),
@@ -2720,7 +2716,7 @@ class SchemaUtilsSuite extends QueryTest
     DateType -> TimestampNTZType,
     DecimalType(10, 2) -> DecimalType(12, 4)
   ))
-  test(
+  testSparkMasterOnly(
       s"typeWideningMode - Uniform Iceberg compatibility ${fromType.sql} -> ${toType.sql}") {
     val narrow = new StructType().add("a", fromType)
     val wide = new StructType().add("a", toType)
@@ -2775,7 +2771,7 @@ class SchemaUtilsSuite extends QueryTest
     }
   }
 
-  test(
+  testSparkMasterOnly(
     s"typeWideningMode - widen to common wider decimal") {
     val left = new StructType().add("a", DecimalType(10, 2))
     val right = new StructType().add("a", DecimalType(5, 4))
@@ -2785,9 +2781,7 @@ class SchemaUtilsSuite extends QueryTest
       // Increasing decimal scale isn't supported by Iceberg, so only possible when we don't enforce
       // Iceberg compatibility.
       TypeEvolutionToCommonWiderType(uniformIcebergCompatibleOnly = false),
-      AllTypeWideningToCommonWiderType,
-      AllTypeWideningWithDecimalCoercion,
-      TypeEvolutionWithDecimalCoercion
+      AllTypeWideningToCommonWiderType
     )
 
     for (typeWideningMode <- modesCanWidenToCommonWiderDecimal) {
@@ -2812,7 +2806,7 @@ class SchemaUtilsSuite extends QueryTest
 
   }
 
-  test(
+  testSparkMasterOnly(
     s"typeWideningMode - widen to common wider decimal exceeds max decimal precision") {
     // We'd need a DecimalType(40, 19) to fit both types, which exceeds max decimal precision of 38.
     val left = new StructType().add("a", DecimalType(20, 19))
@@ -2832,27 +2826,6 @@ class SchemaUtilsSuite extends QueryTest
         mergeSchemas(right, left, typeWideningMode = typeWideningMode)
       }
     }
-  }
-
-  test(s"typeWideningMode - widen integral type to common wider decimal") {
-    val left = new StructType()
-      .add("a", ByteType)
-      .add("b", ShortType)
-      .add("c", IntegerType)
-      .add("d", LongType)
-    val right = new StructType()
-      .add("a", DecimalType(2, 1))
-      .add("b", DecimalType(2, 1))
-      .add("c", DecimalType(2, 1))
-      .add("d", DecimalType(2, 1))
-    val wider = new StructType()
-      .add("a", DecimalType(4, 1))
-      .add("b", DecimalType(6, 1))
-      .add("c", DecimalType(11, 1))
-      .add("d", DecimalType(21, 1))
-
-    assert(mergeSchemas(left, right, typeWideningMode = AllTypeWideningWithDecimalCoercion)
-      == wider)
   }
 
   test("schema merging override field metadata") {

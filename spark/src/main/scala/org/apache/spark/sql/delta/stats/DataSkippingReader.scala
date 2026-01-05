@@ -765,7 +765,10 @@ trait DataSkippingReaderBase
       case _: DateFromUnixDate | _: FromUnixTime | _: TimestampToLongBase | _: ToUnixTimestamp |
            _: UnixDate | _: UnixTime | _: UnixTimestamp => true
       // Date and time arithmetic.
-      case expr if DateTimeExpressionShims.isDateTimeArithmeticExpression(expr) => true
+      case _: AddMonthsBase | _: DateAdd | _: DateAddInterval | _: DateDiff | _: DateSub |
+           _: DatetimeSub | _: LastDay | _: MonthsBetween | _: NextDay | _: SubtractDates |
+           _: SubtractTimestamps | _: TimeAdd | _: TimestampAdd | _: TimestampAddYMInterval |
+           _: TimestampDiff | _: TruncInstant => true
       // String expressions.
       case _: Base64 | _: BitLength | _: Chr | _: ConcatWs | _: Decode | _: Elt | _: Empty2Null |
            _: Encode | _: FormatNumber | _: FormatString | _: ILike | _: InitCap | _: Left |
@@ -1074,19 +1077,11 @@ trait DataSkippingReaderBase
           //
           // There is a longer term task SC-22825 to fix the serialization problem that caused this.
           // But we need the adjustment in any case to correctly read stats written by old versions.
-          // TimeAdd is removed in Spark 4.1, using TimestampAdd instead
-          Column(Cast(TimestampAdd(
-            "MILLISECOND",
-            new Literal(1L, LongType),
-            statCol.expr), TimestampType))
+          Column(Cast(TimeAdd(statCol.expr, oneMillisecondLiteralExpr), TimestampType))
         case (statCol, TimestampNTZType, _) if pathToStatType.head == MAX =>
           // We also apply the same adjustment of max stats that was applied to Timestamp
           // for TimestampNTZ because these 2 types have the same precision in terms of time.
-          // TimeAdd is removed in Spark 4.1, using TimestampAdd instead
-          Column(Cast(TimestampAdd(
-            "MILLISECOND",
-            new Literal(1L, LongType),
-            statCol.expr), TimestampNTZType))
+          Column(Cast(TimeAdd(statCol.expr, oneMillisecondLiteralExpr), TimestampNTZType))
         case (statCol, _, _) =>
           statCol
       }
@@ -1547,15 +1542,6 @@ trait DataSkippingReaderBase
     val withNumRecords = {
       getFilesAndNumRecords(df)
     }
-    pruneFilesWithIterator(withNumRecords, limit)
-  }
-
-  /**
-   * Accepts an iterator of files with record counts and prunes them based on the limit.
-   */
-  protected def pruneFilesWithIterator(
-      withNumRecords: Iterator[(AddFile, NumRecords)] with Closeable,
-      limit: Long): ScanAfterLimit = {
 
     var logicalRowsToScan = 0L
     var physicalRowsToScan = 0L

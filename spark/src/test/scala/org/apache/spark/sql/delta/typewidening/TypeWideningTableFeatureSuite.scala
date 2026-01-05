@@ -35,11 +35,14 @@ import org.apache.spark.sql.types._
 /**
  * Test suite covering feature enablement and configuration tests.
  */
-class TypeWideningTableFeatureEnablementSuite extends TypeWideningTableFeatureEnablementTests
+class TypeWideningTableFeatureEnablementSuite
+  extends QueryTest
     with TypeWideningTestMixin
     with TypeWideningDropFeatureTestMixin
+    with TypeWideningTableFeatureEnablementTests
 
-trait TypeWideningTableFeatureEnablementTests extends QueryTest
+trait TypeWideningTableFeatureEnablementTests
+  extends DeltaExcludedBySparkVersionTestMixinShims
     with TypeWideningTestCases {
   self: QueryTest
     with TypeWideningTestMixin
@@ -156,6 +159,7 @@ class TypeWideningTableFeatureDropSuite
 
 trait TypeWideningTableFeatureDropTests
   extends RowTrackingTestUtils
+    with DeltaExcludedBySparkVersionTestMixinShims
     with TypeWideningTestCases {
   self: QueryTest
     with TypeWideningTestMixin
@@ -376,11 +380,13 @@ trait TypeWideningTableFeatureDropTests
  * Additional tests covering e.g. unsupported type change check, CLONE, RESTORE.
  */
 class TypeWideningTableFeatureAdvancedSuite
-  extends TypeWideningTableFeatureAdvancedTests
+  extends QueryTest
     with TypeWideningTestMixin
     with TypeWideningDropFeatureTestMixin
+    with TypeWideningTableFeatureAdvancedTests
 
-trait TypeWideningTableFeatureAdvancedTests extends QueryTest
+trait TypeWideningTableFeatureAdvancedTests
+  extends DeltaExcludedBySparkVersionTestMixinShims
     with TypeWideningTestCases {
   self: QueryTest
     with TypeWideningTestMixin
@@ -538,6 +544,42 @@ trait TypeWideningTableFeatureAdvancedTests extends QueryTest
     readDeltaTable(tempPath).collect()
   }
 
+  testSparkLatestOnly(
+    "helpful error when reading type changes not supported yet during preview") {
+    sql(s"CREATE TABLE delta.`$tempDir` (a int) USING DELTA")
+    val metadata = new MetadataBuilder()
+      .putMetadataArray("delta.typeChanges", Array(
+        new MetadataBuilder()
+          .putString("toType", "long")
+          .putString("fromType", "int")
+          .build()
+      )).build()
+
+    // Delta 3.2/3.3 doesn't support changing type from int->long, we manually commit that type
+    // change to simulate what Delta 4.0 could do.
+    deltaLog.withNewTransaction { txn =>
+      txn.commit(
+        Seq(txn.snapshot.metadata.copy(
+          schemaString = new StructType()
+            .add("a", LongType, nullable = true, metadata).json
+        )),
+        ManualUpdate)
+    }
+
+    checkError(
+      exception = intercept[DeltaUnsupportedOperationException] {
+        readDeltaTable(tempPath).collect()
+      },
+      "DELTA_UNSUPPORTED_TYPE_CHANGE_IN_PREVIEW",
+      parameters = Map(
+        "fieldPath" -> "a",
+        "fromType" -> "INT",
+        "toType" -> "BIGINT",
+        "typeWideningFeatureName" -> "typeWidening"
+      )
+    )
+  }
+
   test("type widening rewrite metrics") {
     sql(s"CREATE TABLE delta.`$tempDir` (a byte) USING DELTA")
     addSingleFile(Seq(1, 2, 3), ByteType)
@@ -649,11 +691,13 @@ trait TypeWideningTableFeatureAdvancedTests extends QueryTest
  * Test suite covering preview vs stable feature interactions.
  */
 class TypeWideningTableFeaturePreviewSuite
-  extends TypeWideningTableFeatureVersionTests
+  extends QueryTest
     with TypeWideningTestMixin
     with TypeWideningDropFeatureTestMixin
+    with TypeWideningTableFeatureVersionTests
 
-trait TypeWideningTableFeatureVersionTests extends QueryTest
+trait TypeWideningTableFeatureVersionTests
+  extends DeltaExcludedBySparkVersionTestMixinShims
     with TypeWideningTestCases {
   self: QueryTest
     with TypeWideningTestMixin

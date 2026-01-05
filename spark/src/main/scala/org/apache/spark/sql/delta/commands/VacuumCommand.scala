@@ -181,10 +181,6 @@ object VacuumCommand extends VacuumCommandImpl with Serializable {
         throw DeltaErrors.deltaCannotVacuumManagedTable()
       }
 
-      // By default, we will do full vacuum unless LITE vacuum conf is set
-      val isLiteVacuumEnabled = spark.sessionState.conf.getConf(DeltaSQLConf.LITE_VACUUM_ENABLED)
-      val defaultType = if (isLiteVacuumEnabled) VacuumType.LITE else VacuumType.FULL
-      val vacuumType = vacuumTypeOpt.map(VacuumType.withName).getOrElse(defaultType)
 
       val snapshotTombstoneRetentionMillis = DeltaLog.tombstoneRetentionMillis(snapshot.metadata)
       val retentionMillis = retentionHours.flatMap { h =>
@@ -242,6 +238,10 @@ object VacuumCommand extends VacuumCommandImpl with Serializable {
       val partitionColumns = snapshot.metadata.partitionSchema.fieldNames
       val parallelism = spark.sessionState.conf.parallelPartitionDiscoveryParallelism
       val shouldIcebergMetadataDirBeHidden = UniversalFormat.icebergEnabled(snapshot.metadata)
+      // By default, we will do full vacuum unless LITE vacuum conf is set
+      val isLiteVacuumEnabled = spark.sessionState.conf.getConf(DeltaSQLConf.LITE_VACUUM_ENABLED)
+      val defaultType = if (isLiteVacuumEnabled) VacuumType.LITE else VacuumType.FULL
+      val vacuumType = vacuumTypeOpt.map(VacuumType.withName).getOrElse(defaultType)
       val latestCommitVersionOutsideOfRetentionWindowOpt: Option[Long] =
         if (vacuumType == VacuumType.LITE) {
           try {
@@ -768,9 +768,7 @@ trait VacuumCommandImpl extends DeltaCommand {
       spark: SparkSession,
       retentionMs: Option[Long],
       configuredRetention: Long): Unit = {
-    if (retentionMs.exists(_ < 0)) {
-      throw DeltaErrors.vacuumRetentionPeriodNegative()
-    }
+    require(retentionMs.forall(_ >= 0), "Retention for Vacuum can't be less than 0.")
     val checkEnabled =
       spark.sessionState.conf.getConf(DeltaSQLConf.DELTA_VACUUM_RETENTION_CHECK_ENABLED)
     val retentionSafe = retentionMs.forall(_ >= configuredRetention)
@@ -778,9 +776,17 @@ trait VacuumCommandImpl extends DeltaCommand {
     if (TimeUnit.HOURS.toMillis(configuredRetentionHours) < configuredRetention) {
       configuredRetentionHours += 1
     }
-    if (checkEnabled && !retentionSafe) {
-      throw DeltaErrors.vacuumRetentionPeriodTooShort(configuredRetentionHours)
-    }
+    require(!checkEnabled || retentionSafe,
+      s"""Are you sure you would like to vacuum files with such a low retention period? If you have
+        |writers that are currently writing to this table, there is a risk that you may corrupt the
+        |state of your Delta table.
+        |
+        |If you are certain that there are no operations being performed on this table, such as
+        |insert/upsert/delete/optimize, then you may turn off this check by setting:
+        |spark.databricks.delta.retentionDurationCheck.enabled = false
+        |
+        |If you are not sure, please use a value not less than "$configuredRetentionHours hours".
+       """.stripMargin)
   }
 
   /**

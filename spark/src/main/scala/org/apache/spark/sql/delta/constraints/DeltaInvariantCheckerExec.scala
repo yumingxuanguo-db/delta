@@ -119,13 +119,10 @@ object DeltaInvariantCheckerExec extends DeltaLogging {
   }
 
   // Specialized optimizer to run necessary rules so that the check expressions can be evaluated.
-  object DeltaInvariantCheckerOptimizer extends RuleExecutor[LogicalPlan] {
-    import org.apache.spark.sql.catalyst.optimizer.{ReplaceExpressions, RewriteWithExpression}
-
-    final override protected def batches = Seq(
-      Batch("Finish Analysis", Once, ReplaceExpressions),
-      Batch("Rewrite With expression", Once, RewriteWithExpression)
-    )
+  object DeltaInvariantCheckerOptimizer
+      extends RuleExecutor[LogicalPlan]
+      with DeltaInvariantCheckerOptimizerShims {
+    final override protected def batches = DELTA_INVARIANT_CHECKER_OPTIMIZER_BATCHES
   }
 
   /** Build the extractor for a particular column. */

@@ -1219,13 +1219,6 @@ trait DeltaErrorsBase
     )
   }
 
-  def readSourceSchemaConflictException: Throwable = {
-    new DeltaAnalysisException(
-      errorClass = "DELTA_READ_SOURCE_SCHEMA_CONFLICT",
-      messageParameters = Array.empty
-    )
-  }
-
   def schemaNotProvidedException: Throwable = {
     new DeltaAnalysisException(
       errorClass = "DELTA_SCHEMA_NOT_PROVIDED",
@@ -1866,17 +1859,6 @@ trait DeltaErrorsBase
   def deltaCannotVacuumLite(): Throwable = {
     new DeltaIllegalStateException(
       errorClass = "DELTA_CANNOT_VACUUM_LITE")
-  }
-
-  def vacuumRetentionPeriodNegative(): Throwable = {
-    new DeltaIllegalArgumentException(
-      errorClass = "DELTA_VACUUM_RETENTION_PERIOD_NEGATIVE")
-  }
-
-  def vacuumRetentionPeriodTooShort(configuredRetentionHours: Long): Throwable = {
-    new DeltaIllegalArgumentException(
-      errorClass = "DELTA_VACUUM_RETENTION_PERIOD_TOO_SHORT",
-      messageParameters = Array(configuredRetentionHours.toString))
   }
 
   def updateSchemaMismatchExpression(from: StructType, to: StructType): Throwable = {
@@ -3842,16 +3824,6 @@ trait DeltaErrorsBase
     new DeltaUnsupportedOperationException(
       errorClass = "DELTA_UNSUPPORTED_CATALOG_MANAGED_TABLE_CREATION",
       messageParameters = Array.empty)
-  }
-
-  def numRecordsMismatch(
-      operation: String,
-      numAddedRecords: Long,
-      numRemovedRecords: Long): Throwable = {
-    new DeltaIllegalStateException(
-      errorClass = "DELTA_NUM_RECORDS_MISMATCH",
-      messageParameters = Array(operation, numAddedRecords.toString, numRemovedRecords.toString)
-    )
   }
 
   def commandInvariantViolationException(

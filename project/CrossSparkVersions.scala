@@ -176,7 +176,7 @@ import Unidoc._
 case class SparkVersionSpec(
   fullVersion: String,
   targetJvm: String,
-  additionalSourceDir: Option[String] = None,
+  additionalSourceDir: Option[String],
   antlr4Version: String,
   additionalJavaOptions: Seq[String] = Seq.empty,
   jacksonVersion: String = "2.15.2"
@@ -194,8 +194,11 @@ case class SparkVersionSpec(
   /** Whether this is the master Spark version */
   def isMaster: Boolean = SparkVersionSpec.MASTER.contains(this)
 
-  /** Returns log4j config file */
-  def log4jConfig: String = "log4j2.properties"
+  /** Returns log4j config file based on source directory */
+  def log4jConfig: String = {
+    if (additionalSourceDir.exists(_.contains("master"))) "log4j2_spark_master.properties"
+    else "log4j2.properties"
+  }
 
   /** Whether to export JARs instead of class directories (needed for Spark Connect on master) */
   def exportJars: Boolean = additionalSourceDir.exists(_.contains("master"))
@@ -206,50 +209,44 @@ case class SparkVersionSpec(
 
 object SparkVersionSpec {
 
-  private val java17TestSettings = Seq(
-    // Copied from SparkBuild.scala to support Java 17 for unit tests (see apache/spark#34153)
-    "--add-opens=java.base/java.lang=ALL-UNNAMED",
-    "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
-    "--add-opens=java.base/java.io=ALL-UNNAMED",
-    "--add-opens=java.base/java.net=ALL-UNNAMED",
-    "--add-opens=java.base/java.nio=ALL-UNNAMED",
-    "--add-opens=java.base/java.util=ALL-UNNAMED",
-    "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
-    "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
-    "--add-opens=java.base/sun.nio.cs=ALL-UNNAMED",
-    "--add-opens=java.base/sun.security.action=ALL-UNNAMED",
-    "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED"
+  private val spark35 = SparkVersionSpec(
+    fullVersion = "3.5.7",
+    targetJvm = "11",
+    additionalSourceDir = Some("scala-spark-3.5"),
+    antlr4Version = "4.9.3",
+    additionalJavaOptions = Seq.empty
   )
 
-  private val spark40 = SparkVersionSpec(
-    fullVersion = "4.0.1",
+  private val spark40Snapshot = SparkVersionSpec(
+    fullVersion = "4.0.2-SNAPSHOT",
     targetJvm = "17",
-    additionalSourceDir = Some("scala-shims/spark-4.0"),
+    additionalSourceDir = Some("scala-spark-master"),
     antlr4Version = "4.13.1",
-    additionalJavaOptions = java17TestSettings,
+    additionalJavaOptions = Seq(
+      // Copied from SparkBuild.scala to support Java 17 for unit tests (see apache/spark#34153)
+      "--add-opens=java.base/java.lang=ALL-UNNAMED",
+      "--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+      "--add-opens=java.base/java.io=ALL-UNNAMED",
+      "--add-opens=java.base/java.net=ALL-UNNAMED",
+      "--add-opens=java.base/java.nio=ALL-UNNAMED",
+      "--add-opens=java.base/java.util=ALL-UNNAMED",
+      "--add-opens=java.base/java.util.concurrent=ALL-UNNAMED",
+      "--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+      "--add-opens=java.base/sun.nio.cs=ALL-UNNAMED",
+      "--add-opens=java.base/sun.security.action=ALL-UNNAMED",
+      "--add-opens=java.base/sun.util.calendar=ALL-UNNAMED"
+    ),
     jacksonVersion = "2.18.2"
   )
 
-  private val spark41 = SparkVersionSpec(
-    fullVersion = "4.1.0",
-    targetJvm = "17",
-    additionalSourceDir = Some("scala-shims/spark-4.1"),
-    antlr4Version = "4.13.1",
-    additionalJavaOptions = java17TestSettings,
-    jacksonVersion = "2.18.2"
-  )
-
-  // TODO: 4.2.0-SNAPSHOT (actual master)
-
-  // TODO: Once Spark 4.1 is officially out update DEFAULT = spark41
   /** Default Spark version */
-  val DEFAULT = spark40
+  val DEFAULT = spark35
 
   /** Spark master branch version (optional). Release branches should not build against master */
-  val MASTER: Option[SparkVersionSpec] = None
+  val MASTER: Option[SparkVersionSpec] = Some(spark40Snapshot)
 
   /** All supported Spark versions - internal use only */
-  val ALL_SPECS = Seq(spark40, spark41)
+  val ALL_SPECS = Seq(spark35, spark40Snapshot)
 }
 
 /** See docs on top of this file */
@@ -266,7 +263,6 @@ object CrossSparkVersions extends AutoPlugin {
     // Resolve aliases first
     val resolvedInput = input match {
       case "default" => SparkVersionSpec.DEFAULT.fullVersion
-      /*
       case "master" => SparkVersionSpec.MASTER match {
         case Some(masterSpec) => masterSpec.fullVersion
         case None => throw new IllegalArgumentException(
@@ -274,7 +270,6 @@ object CrossSparkVersions extends AutoPlugin {
           SparkVersionSpec.ALL_SPECS.map(_.fullVersion).mkString(", ")
         )
       }
-      */
       case other => other
     }
 
@@ -314,7 +309,7 @@ object CrossSparkVersions extends AutoPlugin {
   }
 
   // Scala version constant (Scala 2.12 support was dropped)
-  private val scala213 = "2.13.17"
+  private val scala213 = "2.13.16"
 
   /**
    * Common Spark version-specific settings used by all Spark-aware modules.

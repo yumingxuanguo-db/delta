@@ -30,9 +30,10 @@ import org.apache.spark.sql.types._
  * INTO when the type widening table feature is supported.
  */
 class TypeWideningMergeIntoSchemaEvolutionSuite
-    extends TypeWideningMergeIntoSchemaEvolutionTests
+    extends QueryTest
     with DeltaDMLTestUtils
-    with TypeWideningTestMixin {
+    with TypeWideningTestMixin
+    with TypeWideningMergeIntoSchemaEvolutionTests {
 
   protected override def sparkConf: SparkConf = {
     super.sparkConf
@@ -43,7 +44,8 @@ class TypeWideningMergeIntoSchemaEvolutionSuite
 /**
  * Tests covering type widening during schema evolution in MERGE INTO.
  */
-trait TypeWideningMergeIntoSchemaEvolutionTests extends QueryTest
+trait TypeWideningMergeIntoSchemaEvolutionTests
+    extends DeltaExcludedBySparkVersionTestMixinShims
     with MergeIntoSQLTestUtils
     with MergeIntoSchemaEvolutionMixin
     with TypeWideningTestCases {
@@ -51,7 +53,7 @@ trait TypeWideningMergeIntoSchemaEvolutionTests extends QueryTest
 
   import testImplicits._
 
-  test(s"MERGE - always automatic type widening TINYINT -> DOUBLE") {
+  testSparkMasterOnly(s"MERGE - always automatic type widening TINYINT -> DOUBLE") {
     withTable("source") {
       sql(s"CREATE TABLE delta.`$tempPath` (a short) USING DELTA")
       sql("CREATE TABLE source (a double) USING DELTA")

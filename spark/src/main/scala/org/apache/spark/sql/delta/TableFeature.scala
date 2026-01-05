@@ -385,7 +385,6 @@ object TableFeature {
       VariantTypePreviewTableFeature,
       VariantTypeTableFeature,
       VariantShreddingPreviewTableFeature,
-      VariantShreddingTableFeature,
       CatalogOwnedTableFeature,
       CoordinatedCommitsTableFeature,
       CheckpointProtectionTableFeature)
@@ -742,43 +741,14 @@ object VariantTypeTableFeature extends ReaderWriterFeature(name = "variantType")
   }
 }
 
-trait VariantShreddingTableFeatureBase {
-  def forcePreviewTableFeature: Boolean = SparkSession
-    .getActiveSession
-    .map(_.conf.get(DeltaSQLConf.FORCE_USE_PREVIEW_SHREDDING_FEATURE))
-    .getOrElse(false)
-}
-
 object VariantShreddingPreviewTableFeature
     extends ReaderWriterFeature(name = "variantShredding-preview")
-    with FeatureAutomaticallyEnabledByMetadata
-    with VariantShreddingTableFeatureBase {
+    with FeatureAutomaticallyEnabledByMetadata {
   override def automaticallyUpdateProtocolOfExistingTables: Boolean = true
 
   override def metadataRequiresFeatureToBeEnabled(
       protocol: Protocol, metadata: Metadata, spark: SparkSession): Boolean = {
-    forcePreviewTableFeature && DeltaConfigs.ENABLE_VARIANT_SHREDDING.fromMetaData(metadata) &&
-    // Do not require this table feature to be enabled when the 'variantShredding' table feature
-    // is enabled so existing tables with shredding with only 'variantShredding' and not
-    // 'variantShredding-preview' can be operated on when the
-    // 'FORCE_USE_PREVIEW_SHREDDING_FEATURE' config is enabled.
-    !protocol.isFeatureSupported(VariantShreddingTableFeature)
-  }
-}
-
-object VariantShreddingTableFeature
-    extends ReaderWriterFeature(name = "variantShredding")
-    with FeatureAutomaticallyEnabledByMetadata
-    with VariantShreddingTableFeatureBase {
-  override def automaticallyUpdateProtocolOfExistingTables: Boolean =
-    VariantShreddingPreviewTableFeature.automaticallyUpdateProtocolOfExistingTables
-
-  override def metadataRequiresFeatureToBeEnabled(
-      protocol: Protocol, metadata: Metadata, spark: SparkSession): Boolean = {
-    !forcePreviewTableFeature && DeltaConfigs.ENABLE_VARIANT_SHREDDING.fromMetaData(metadata) &&
-    // Do not require this table feature to be enabled when the 'variantShredding-preview' table
-    // feature is enabled so old tables with only the preview table feature can be read.
-    !protocol.isFeatureSupported(VariantShreddingPreviewTableFeature)
+    DeltaConfigs.ENABLE_VARIANT_SHREDDING.fromMetaData(metadata)
   }
 }
 

@@ -20,7 +20,6 @@ package org.apache.spark.sql.delta
 import scala.collection.mutable
 import scala.util.control.NonFatal
 
-import org.apache.spark.sql.delta.Relocated._
 import org.apache.spark.sql.delta.ClassicColumnConversions._
 import org.apache.spark.sql.delta.actions.{Metadata, Protocol}
 import org.apache.spark.sql.delta.commands.cdc.CDCReader
@@ -35,6 +34,7 @@ import org.apache.spark.sql.catalyst.expressions.EqualNullSafe
 import org.apache.spark.sql.catalyst.util.CaseInsensitiveMap
 import org.apache.spark.sql.catalyst.util.ResolveDefaultColumns._
 import org.apache.spark.sql.execution.QueryExecution
+import org.apache.spark.sql.execution.streaming.IncrementalExecution
 import org.apache.spark.sql.types.{MetadataBuilder, StructField, StructType}
 
 /**

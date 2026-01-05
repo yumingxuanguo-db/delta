@@ -18,7 +18,7 @@ package io.delta.sharing.spark
 
 import java.time.LocalDateTime
 
-import org.apache.spark.sql.delta.{DeltaIllegalStateException, DeltaLog}
+import org.apache.spark.sql.delta.{DeltaExcludedBySparkVersionTestMixinShims, DeltaIllegalStateException, DeltaLog}
 import org.apache.spark.sql.delta.DeltaOptions.{
   IGNORE_CHANGES_OPTION,
   IGNORE_DELETES_OPTION,
@@ -49,7 +49,8 @@ class DeltaFormatSharingSourceSuite
     extends StreamTest
     with DeltaSQLCommandTest
     with DeltaSharingTestSparkUtils
-    with DeltaSharingDataSourceDeltaTestUtils {
+    with DeltaSharingDataSourceDeltaTestUtils
+    with DeltaExcludedBySparkVersionTestMixinShims {
 
   import testImplicits._
 
@@ -1215,7 +1216,9 @@ class DeltaFormatSharingSourceSuite
         }
     }
 
-    test("streaming variant query works") {
+    testSparkMasterOnly(
+      "streaming variant query works"
+    ) {
       withTempDirs { (inputDir, outputDir, checkpointDir) =>
         val deltaTableName = "variant_table"
         withTable(deltaTableName) {

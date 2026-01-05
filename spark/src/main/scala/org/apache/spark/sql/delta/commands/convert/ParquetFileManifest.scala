@@ -16,7 +16,6 @@
 
 package org.apache.spark.sql.delta.commands.convert
 
-import org.apache.spark.sql.delta.Relocated._
 import org.apache.spark.sql.delta.{DeltaErrors, SerializableFileStatus}
 import org.apache.spark.sql.delta.metering.DeltaLogging
 import org.apache.spark.sql.delta.sources.DeltaSQLConf
@@ -26,6 +25,7 @@ import org.apache.hadoop.fs.Path
 import org.apache.spark.sql.{Dataset, SparkSession}
 import org.apache.spark.sql.catalyst.catalog.CatalogTable
 import org.apache.spark.sql.execution.datasources.parquet.{ParquetFileFormat, ParquetToSparkSchemaConverter}
+import org.apache.spark.sql.execution.streaming.MetadataLogFileIndex
 import org.apache.spark.sql.types.StructType
 import org.apache.spark.util.SerializableConfiguration
 
@@ -187,7 +187,7 @@ class MetadataLogFileManifest(
     serializableConf: SerializableConfiguration)
   extends ConvertTargetFileManifest with DeltaLogging {
 
-  val index = createMetadataLogFileIndex(spark, new Path(basePath), Map.empty, None)
+  val index = new MetadataLogFileIndex(spark, new Path(basePath), Map.empty, None)
 
   protected def doList(): Dataset[SerializableFileStatus] = {
     import org.apache.spark.sql.delta.implicits._

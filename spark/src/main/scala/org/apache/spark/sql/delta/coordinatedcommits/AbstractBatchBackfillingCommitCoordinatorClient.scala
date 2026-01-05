@@ -32,7 +32,7 @@ import io.delta.storage.commit.{CommitCoordinatorClient, CommitFailedException =
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileStatus, Path}
 
-import org.apache.spark.internal.{Logging, MDC}
+import org.apache.spark.internal.{LoggingShims, MDC}
 
 /**
  * An abstract [[CommitCoordinatorClient]] which triggers backfills every n commits.
@@ -40,7 +40,7 @@ import org.apache.spark.internal.{Logging, MDC}
  */
 trait AbstractBatchBackfillingCommitCoordinatorClient
   extends CommitCoordinatorClient
-    with Logging {
+    with LoggingShims {
 
   /**
    * Size of batch that should be backfilled. So every commit version which satisfies
